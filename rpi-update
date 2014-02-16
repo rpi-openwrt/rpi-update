@@ -1,0 +1,162 @@
+#!/bin/sh
+
+VERSION="0.3"
+EXTRAVERSION="(OpenWRT version)"
+USAGE=1
+UPGRADE=0
+CHECK=0
+BRANCH="master"
+BOOT_PATH="/tmp/mnt-boot"
+REFURL="https://api.github.com/repos/Hexxeh/rpi-firmware/git/refs/heads"
+RAWURL="https://raw.github.com/Hexxeh/rpi-firmware"
+CURRENT_REV="unknown"
+LATEST_REV="unknown"
+BRANCH_NAME="MASTER"
+TMP_PATH="/tmp/rpi-fw-upgrade"
+AMOUNT_FILES=6
+CURRENT_FILE=1
+MOUNT_NEEDED=0
+BOOTPATH_NEEDED=0
+BOOT_DEV="/dev/mmcblk0p1"
+
+header() {
+	echo "rpi-update v$VERSION$EXTRAVERSION"
+	echo
+}
+
+usage() {
+	cat << EOL
+usage: rpi-update [options]
+	-c, --c: check for updated version of firmware
+	-u, --u: upgrade firmware (if not running latest)
+	-n, --n: use branch "next" instead of "master"
+EOL
+	exit 0
+}
+
+download_file() {
+	echo "Downloading $1 [$CURRENT_FILE/$AMOUNT_FILES]"
+	curl -k -s -o $TMP_PATH/$1 $RAWURL/$LATEST_REV/$1
+	[ $? -ne 0 ] && {
+		echo "Downloading failed. Abort."
+		exit 1
+	}
+	CURRENT_FILE=$(($CURRENT_FILE + 1))
+}
+
+upgrade_file() {
+	/bin/cp $TMP_PATH/$1 $BOOT_PATH/$1
+	[ $? -ne 0 ] && {
+		echo "Firmware upgrade failed with file $1. Firmware possibly corrupted and malfunctional. Sorry. Try again?"
+		exit 1
+	}
+	sync
+}
+
+upgrade() {
+	[ -d $TMP_PATH ] && rm -rf $TMP_PATH >/dev/null
+	mkdir -p $TMP_PATH >/dev/null
+
+	echo
+	download_file "COPYING.linux"
+	download_file "LICENSE.broadcom"
+	download_file "bootcode.bin"
+	download_file "fixup.dat"
+	download_file "start.elf"
+	download_file "start_cd.elf"
+	echo "$LATEST_REV" > $TMP_PATH/.firmware_revision
+
+	echo
+	echo "Upgrading firmware"
+	upgrade_file "COPYING.linux"
+	upgrade_file "LICENSE.broadcom"
+	upgrade_file "bootcode.bin"
+	upgrade_file "fixup.dat"
+	upgrade_file "start.elf"
+	upgrade_file "start_cd.elf"
+	echo "$LATEST_REV" > $BOOT_PATH/.firmware_revision
+	sync
+	echo "Done. Please, reboot."
+	rm -rf $TMP_PATH > /dev/null
+}
+
+do_mount() {
+	MOUNT_POINT=$(cat /proc/mounts | grep $BOOT_DEV | awk '{print $2}')
+	[ -z $MOUNT_POINT ] && {
+		[ -d $BOOT_PATH ] || {
+			BOOTPATH_NEEDED=1
+			mkdir -p $BOOT_PATH
+			echo had to create boot path
+		}
+		MOUNT_NEEDED=1
+		mount $BOOT_DEV $BOOT_PATH -t vfat
+		echo had to mount
+	} || BOOT_PATH=$MOUNT_POINT
+
+	[ -f $BOOT_PATH/.firmware_revision ] && CURRENT_REV=$(cat $BOOT_PATH/.firmware_revision)
+}
+
+check() {
+
+	[ $(/usr/bin/id -u) != "0" ] && {
+		echo Sorry. Only root can check/update firmware.
+		echo
+		exit 1
+	}
+
+	do_mount
+
+	echo "Checking firmware version. Please wait."
+	LATEST_REV=$(curl -k -s $REFURL/$BRANCH | sed 's/[\" {},]//g' | awk '{ gsub(/object:/, ""); print }' | tr -d ' ' | sed '/^$/d' | grep "sha:" | awk -F":" '{print $2}')
+
+	[ -z $LATEST_REV ] && {
+		echo "Uh oh. We encountered a problem. Latest revision of firmware is not fetchable. Check internet connection."
+		echo "Abort."
+		[ $MOUNT_NEEDED = 1 ] && {
+			umount $BOOT_PATH
+			[ $BOOTPATH_NEEDED = 1 ] && rmdir $BOOT_PATH
+		}
+		exit 1
+	}
+
+	[ $CURRENT_REV = $LATEST_REV ] && echo "You are running with latest firmware version of branch $BRANCH_NAME. ($CURRENT_REV)" || {
+		echo "You are running with firmware version $CURRENT_REV and latest version of branch $BRANCH_NAME is $LATEST_REV."
+		[ $UPGRADE = 1 ] && upgrade
+		sync
+	}
+
+	[ $MOUNT_NEEDED = 1 ] && {
+		umount $BOOT_PATH
+		[ $BOOTPATH_NEEDED = 1 ] && rmdir $BOOT_PATH
+	}
+}
+
+header
+
+[ $# -eq 0 ] && USAGE=1 || {
+	USAGE=0
+	for i in "$@"
+	do
+		case $i in
+			-c|--c|-check|--check)
+				CHECK=1;;
+			-u|--u|-upgrade|--upgrade)
+				CHECK=1
+				UPGRADE=1;;
+			-n|--n|-next|--next)
+				BRANCH="next"
+				BRANCH_NAME="NEXT"
+				;;
+			-h|--h|-usage|--usage)
+				USAGE=1;;
+			*)
+				echo "--Unknown option: $i"
+				exit 1
+				;;
+		esac
+	done
+}
+
+[ $BRANCH = "next" ] && [ $CHECK = 0 ] && USAGE=1
+[ $USAGE = 1 ] && usage
+[ $CHECK = 1 ] && check
