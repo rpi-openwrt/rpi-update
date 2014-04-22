@@ -1,6 +1,6 @@
 #!/bin/sh
 
-VERSION="0.3"
+VERSION="0.4"
 EXTRAVERSION="(OpenWRT version)"
 USAGE=1
 UPGRADE=0
@@ -86,11 +86,11 @@ do_mount() {
 		[ -d $BOOT_PATH ] || {
 			BOOTPATH_NEEDED=1
 			mkdir -p $BOOT_PATH
-			echo had to create boot path
+			echo "Mount path created."
 		}
 		MOUNT_NEEDED=1
 		mount $BOOT_DEV $BOOT_PATH -t vfat
-		echo had to mount
+		echo "Mounted boot device."
 	} || BOOT_PATH=$MOUNT_POINT
 
 	[ -f $BOOT_PATH/.firmware_revision ] && CURRENT_REV=$(cat $BOOT_PATH/.firmware_revision)
@@ -99,7 +99,7 @@ do_mount() {
 check() {
 
 	[ $(/usr/bin/id -u) != "0" ] && {
-		echo Sorry. Only root can check/update firmware.
+		echo "Sorry. Only root can check/update firmware."
 		echo
 		exit 1
 	}
@@ -112,7 +112,7 @@ check() {
 	[ -z $LATEST_REV ] && {
 		echo "Uh oh. We encountered a problem. Latest revision of firmware is not fetchable. Check internet connection."
 		echo "Abort."
-		[ $MOUNT_NEEDED = 1 ] && {
+		[ $MOUNT_NEEDED = 1 ] && {
 			umount $BOOT_PATH
 			[ $BOOTPATH_NEEDED = 1 ] && rmdir $BOOT_PATH
 		}
