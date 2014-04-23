@@ -1,6 +1,6 @@
 #!/bin/sh
 
-VERSION="0.4"
+VERSION="0.41"
 EXTRAVERSION="(OpenWRT version)"
 USAGE=1
 UPGRADE=0
@@ -59,7 +59,7 @@ upgrade() {
 
 	echo
 	download_file "COPYING.linux"
-	download_file "LICENSE.broadcom"
+	download_file "LICENCE.broadcom"
 	download_file "bootcode.bin"
 	download_file "fixup.dat"
 	download_file "start.elf"
@@ -69,7 +69,7 @@ upgrade() {
 	echo
 	echo "Upgrading firmware"
 	upgrade_file "COPYING.linux"
-	upgrade_file "LICENSE.broadcom"
+	upgrade_file "LICENCE.broadcom"
 	upgrade_file "bootcode.bin"
 	upgrade_file "fixup.dat"
 	upgrade_file "start.elf"
