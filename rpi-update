@@ -36,7 +36,7 @@ EOL
 
 download_file() {
 	echo "Downloading $1 [$CURRENT_FILE/$AMOUNT_FILES]"
-	curl -k -s -o $TMP_PATH/$1 $RAWURL/$LATEST_REV/$1
+	curl -L -k -s -o $TMP_PATH/$1 $RAWURL/$LATEST_REV/$1
 	[ $? -ne 0 ] && {
 		echo "Downloading failed. Abort."
 		exit 1
